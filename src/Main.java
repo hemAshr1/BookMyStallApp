@@ -2,48 +2,85 @@ import java.util.*;
 
 class RoomInventory {
     private Map<String, Integer> availability;
-    private List<String> rollbackHistory;
 
     public RoomInventory() {
         availability = new HashMap<>();
-        rollbackHistory = new ArrayList<>();
+        availability.put("Single", 5);
+        availability.put("Double", 3);
+        availability.put("Suite", 2);
     }
 
-    // Register room type with availability
-    public void addRoomType(String roomType, int availableCount) {
-        availability.put(roomType, availableCount);
-    }
-
-    // Cancel booking and restore inventory
-    public void cancelBooking(String reservationId, String roomType) {
-        System.out.println("Booking Cancellation");
-        System.out.println("Booking cancelled successfully. Inventory restored for room type: " + roomType);
-        rollbackHistory.add("Released Reservation ID: " + reservationId);
-
-        // Restore availability
-        availability.put(roomType, availability.getOrDefault(roomType, 0) + 1);
-
-        // Display rollback history
-        System.out.println();
-        System.out.println("Rollback History (Most Recent First):");
-        for (int i = rollbackHistory.size() - 1; i >= 0; i--) {
-            System.out.println(rollbackHistory.get(i));
+    // Synchronized allocation to ensure thread safety
+    public synchronized boolean allocateRoom(String guestName, String roomType) {
+        int count = availability.getOrDefault(roomType, 0);
+        if (count > 0) {
+            int roomId = (availability.get(roomType) - count) + 1;
+            availability.put(roomType, count - 1);
+            System.out.println("Booking confirmed for Guest: " + guestName +
+                    ", Room ID: " + roomType + "-" + roomId);
+            return true;
+        } else {
+            System.out.println("Booking failed for Guest: " + guestName +
+                    ", Room Type: " + roomType + " (No availability)");
+            return false;
         }
+    }
 
-        // Display updated availability
-        System.out.println();
-        System.out.println("Updated " + roomType + " Room Availability: " + availability.get(roomType));
+    public void displayRemainingInventory() {
+        System.out.println("\nRemaining Inventory:");
+        for (Map.Entry<String, Integer> entry : availability.entrySet()) {
+            System.out.println(entry.getKey() + ": " + entry.getValue());
+        }
+    }
+}
+
+class BookingTask implements Runnable {
+    private RoomInventory inventory;
+    private String guestName;
+    private String roomType;
+
+    public BookingTask(RoomInventory inventory, String guestName, String roomType) {
+        this.inventory = inventory;
+        this.guestName = guestName;
+        this.roomType = roomType;
+    }
+
+    @Override
+    public void run() {
+        inventory.allocateRoom(guestName, roomType);
     }
 }
 
 public class Main {
 
     public static void main(String[] args) {
-        // Initialize inventory
         RoomInventory inventory = new RoomInventory();
-        inventory.addRoomType("Single", 5);
 
-        // Cancel a booking (demo)
-        inventory.cancelBooking("Single-1", "Single");
+        System.out.println("Concurrent Booking Simulation\n");
+
+        // Create threads for concurrent booking requests
+        Thread t1 = new Thread(new BookingTask(inventory, "Abhi", "Single"));
+        Thread t2 = new Thread(new BookingTask(inventory, "Vanmathi", "Double"));
+        Thread t3 = new Thread(new BookingTask(inventory, "Kural", "Suite"));
+        Thread t4 = new Thread(new BookingTask(inventory, "Subha", "Single"));
+
+        // Start threads
+        t1.start();
+        t2.start();
+        t3.start();
+        t4.start();
+
+        // Wait for all threads to finish
+        try {
+            t1.join();
+            t2.join();
+            t3.join();
+            t4.join();
+        } catch (InterruptedException e) {
+            System.out.println("Error: Thread interrupted.");
+        }
+
+        // Display remaining inventory
+        inventory.displayRemainingInventory();
     }
 }
