@@ -1,86 +1,61 @@
-import java.util.*;
+import java.io.*;
+import java.util.HashMap;
+import java.util.Map;
 
-class RoomInventory {
+class RoomInventory implements Serializable {
     private Map<String, Integer> availability;
 
     public RoomInventory() {
         availability = new HashMap<>();
-        availability.put("Single", 5);
-        availability.put("Double", 3);
-        availability.put("Suite", 2);
     }
 
-    // Synchronized allocation to ensure thread safety
-    public synchronized boolean allocateRoom(String guestName, String roomType) {
-        int count = availability.getOrDefault(roomType, 0);
-        if (count > 0) {
-            int roomId = (availability.get(roomType) - count) + 1;
-            availability.put(roomType, count - 1);
-            System.out.println("Booking confirmed for Guest: " + guestName +
-                    ", Room ID: " + roomType + "-" + roomId);
-            return true;
-        } else {
-            System.out.println("Booking failed for Guest: " + guestName +
-                    ", Room Type: " + roomType + " (No availability)");
-            return false;
-        }
+    public void addRoomType(String roomType, int availableCount) {
+        availability.put(roomType, availableCount);
     }
 
-    public void displayRemainingInventory() {
-        System.out.println("\nRemaining Inventory:");
+    public Map<String, Integer> getAvailability() {
+        return availability;
+    }
+
+    public void displayInventory() {
+        System.out.println("\nCurrent Inventory:");
         for (Map.Entry<String, Integer> entry : availability.entrySet()) {
             System.out.println(entry.getKey() + ": " + entry.getValue());
         }
     }
 }
 
-class BookingTask implements Runnable {
-    private RoomInventory inventory;
-    private String guestName;
-    private String roomType;
-
-    public BookingTask(RoomInventory inventory, String guestName, String roomType) {
-        this.inventory = inventory;
-        this.guestName = guestName;
-        this.roomType = roomType;
-    }
-
-    @Override
-    public void run() {
-        inventory.allocateRoom(guestName, roomType);
-    }
-}
-
 public class Main {
 
+    private static final String FILE_NAME = "inventory.dat";
+
     public static void main(String[] args) {
-        RoomInventory inventory = new RoomInventory();
+        RoomInventory inventory = null;
 
-        System.out.println("Concurrent Booking Simulation\n");
+        System.out.println("System Recovery");
 
-        // Create threads for concurrent booking requests
-        Thread t1 = new Thread(new BookingTask(inventory, "Abhi", "Single"));
-        Thread t2 = new Thread(new BookingTask(inventory, "Vanmathi", "Double"));
-        Thread t3 = new Thread(new BookingTask(inventory, "Kural", "Suite"));
-        Thread t4 = new Thread(new BookingTask(inventory, "Subha", "Single"));
-
-        // Start threads
-        t1.start();
-        t2.start();
-        t3.start();
-        t4.start();
-
-        // Wait for all threads to finish
-        try {
-            t1.join();
-            t2.join();
-            t3.join();
-            t4.join();
-        } catch (InterruptedException e) {
-            System.out.println("Error: Thread interrupted.");
+        // Try to load persisted inventory
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(FILE_NAME))) {
+            inventory = (RoomInventory) ois.readObject();
+            System.out.println("Inventory data loaded successfully.");
+        } catch (Exception e) {
+            System.out.println("No valid inventory data found. Starting fresh.");
+            inventory = new RoomInventory();
+            inventory.addRoomType("Single", 5);
+            inventory.addRoomType("Double", 3);
+            inventory.addRoomType("Suite", 2);
         }
 
-        // Display remaining inventory
-        inventory.displayRemainingInventory();
+        // Display inventory
+        inventory.displayInventory();
+
+        // Save inventory back to file
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(FILE_NAME))) {
+            oos.writeObject(inventory);
+            System.out.println("\nInventory saved successfully.");
+        } catch (IOException e) {
+            System.out.println("Error saving inventory data.");
+        }
+
     }
 }
